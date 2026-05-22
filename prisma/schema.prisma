@@ -1,0 +1,293 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==========================================
+// ENUMS (System Rules & Architecture)
+// ==========================================
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum GermanLevel {
+  A1
+  A2
+  B1
+  B2
+  C1
+  C2
+}
+
+enum AgeGroup {
+  KIDS
+  TEENS
+  ADULTS
+}
+
+enum ClassType {
+  PERSONAL
+  GROUP
+}
+
+enum AssignmentStatus {
+  PENDING   // Waiting for algorithm/admin to match a teacher
+  MATCHED   // Teacher assigned, class ready to start
+  COMPLETED
+}
+
+enum MaterialType {
+  BOOK
+  AUDIO
+  VIDEO
+  MUSIC
+  DOCUMENT
+}
+
+// ==========================================
+// CORE USER USERS & PROFILES
+// ==========================================
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  role          Role           @default(STUDENT)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  studentProfile StudentProfile?
+  teacherProfile TeacherProfile?
+  chatRooms      ChatParticipant[]
+  sentMessages   Message[]
+}
+
+model StudentProfile {
+  id                 String       @id @default(uuid())
+  userId             String       @unique
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentLevel       GermanLevel  @default(A1)
+  age                Int
+  targetAgeGroup     AgeGroup
+
+  // Language Partner Matching Data
+  isLookingForPartner Boolean     @default(false)
+  nativeLanguage      String?
+  learningGoals       String?
+
+  // Institutional Relations
+  classAssignments    ClassAssignment[]
+  enrollments         Enrollment[]
+  submissions         HomeworkSubmission[]
+  examAttempts        ExamAttempt[]
+}
+
+model TeacherProfile {
+  id               String            @id @default(uuid())
+  userId           String            @unique
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isActive         Boolean           @default(true) // For the matching algorithm
+  currentLoad      Int               @default(0)    // Track active student count for fair distribution
+  maxLoad          Int               @default(5)    // Upper limit of students/classes
+
+  classAssignments ClassAssignment[]
+  classes          Class[]
+}
+
+// ==========================================
+// INSTITUTIONAL ALGORITHM & MATCHING
+// ==========================================
+
+// When a student buys/requests a personal or group class, it logs here first.
+// Your backend algorithm can query PENDING requests and assign an available teacher.
+model ClassAssignment {
+  id          String           @id @default(uuid())
+  studentId   String
+  student     StudentProfile   @relation(fields: [studentId], references: [id])
+  teacherId   String?          // Nullable initially until the fair algorithm pairs them
+  teacher     TeacherProfile?  @relation(fields: [teacherId], references: [id])
+  
+  type        ClassType
+  level       GermanLevel
+  ageGroup    AgeGroup
+  status      AssignmentStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+// ==========================================
+// CLASSES & INTEGRATED CURRICULUM
+// ==========================================
+
+model Book {
+  id          String      @id @default(uuid())
+  title       String
+  level       GermanLevel
+  ageGroup    AgeGroup
+  createdAt   DateTime    @default(now())
+
+  classes     Class[]
+}
+
+model Class {
+  id           String       @id @default(uuid())
+  title        String
+  type         ClassType
+  level        GermanLevel
+  ageGroup     AgeGroup
+  meetLink     String?      
+
+  teacherId    String
+  teacher      TeacherProfile @relation(fields: [teacherId], references: [id])
+  bookId       String
+  book         Book           @relation(fields: [bookId], references: [id])
+
+  enrollments  Enrollment[]
+  
+  // Homeworks and Exams are strictly scoped inside a Class context now
+  homeworks    Homework[]
+  exams        Exam[]
+}
+
+model Enrollment {
+  id        String         @id @default(uuid())
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classId   String
+  class     Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  enrolledAt DateTime      @default(now())
+
+  @@unique([studentId, classId])
+}
+
+// ==========================================
+// ACADEMIC SYSTEM (HOMEWORK & EXAMS IN-CLASS)
+// ==========================================
+
+model Homework {
+  id          String         @id @default(uuid())
+  title       String
+  description String
+  fileUrl     String?        // PDF worksheet template
+  dueDate     DateTime
+
+  classId     String
+  class       Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  submissions HomeworkSubmission[]
+}
+
+model HomeworkSubmission {
+  id          String         @id @default(uuid())
+  fileUrl     String         // Student's completed upload
+  submittedAt DateTime       @default(now())
+  grade       String?
+  feedback    String?
+
+  homeworkId  String
+  homework    Homework       @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model Exam {
+  id           String         @id @default(uuid())
+  title        String
+  durationMins Int            @default(60)
+
+  classId      String
+  class        Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  questions    Question[]
+  attempts     ExamAttempt[]
+}
+
+model Question {
+  id            String   @id @default(uuid())
+  text          String
+  options       String[] 
+  correctOption String   
+
+  examId        String
+  exam          Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+}
+
+model ExamAttempt {
+  id          String         @id @default(uuid())
+  score       Float
+  passed      Boolean
+  submittedAt DateTime       @default(now())
+
+  examId      String
+  exam        Exam           @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// WHATSAPP-STYLE CHAT SYSTEM
+// ==========================================
+
+model ChatRoom {
+  id           String            @id @default(uuid())
+  isGroup      Boolean           @default(false) // Allows 1-on-1 language partners or group class chats
+  createdAt    DateTime          @default(now())
+  
+  participants ChatParticipant[]
+  messages     Message[]
+}
+
+model ChatParticipant {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatRoomId String
+  chatRoom   ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  joinedAt   DateTime @default(now())
+
+  @@unique([userId, chatRoomId])
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  text       String
+  createdAt  DateTime @default(now())
+
+  senderId   String
+  sender     User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  chatRoomId String
+  chatRoom   ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// RESOURCES & CONTENT
+// ==========================================
+
+model Article {
+  id        String      @id @default(uuid())
+  title     String
+  slug      String      @unique
+  content   String      
+  level     GermanLevel?
+  published Boolean     @default(false)
+  createdAt DateTime    @default(now())
+}
+
+model Resource {
+  id          String       @id @default(uuid())
+  title       String
+  type        MaterialType 
+  fileUrl     String       
+  level       GermanLevel? 
+  createdAt   DateTime     @default(now())
+}
