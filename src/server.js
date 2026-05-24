@@ -1,7 +1,9 @@
-import express from "express";
+import express, { urlencoded } from "express";
 import { port } from "./config/index.js";
 import mainRoute from "./routes/index.js";
 const app = express();
+
+app.use(urlencoded({ extended: true }));
 
 app.use("/api/", mainRoute);
 
