@@ -1,7 +1,0 @@
-POST http://localhost:5000/api/register HTTP/1.1
-Content-Type: application/x-www-form-urlencoded
-
-{
-  "email": "test@gmail.com",
-  "pw": "12345678",
-}

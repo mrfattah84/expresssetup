@@ -1,5 +1,8 @@
-const validate = (schema) => {
-  return (req, res, next) => {
+import { NextFunction, Request, Response } from "express";
+import Joi from "joi";
+
+const validate = (schema: Joi.AnySchema) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     // 'abortEarly: false' finds all errors, not just the first one
     // 'stripUnknown: true' removes fields not defined in your schema (Security Best Practice)
     const { error, value } = schema.validate(req.body, {
