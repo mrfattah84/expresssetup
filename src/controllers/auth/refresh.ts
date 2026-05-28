@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import db from "../../models/db.js";
-import jwt, { JsonWebTokenError } from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 import { jwtSecret, jwtRefreshSecret } from "../../config/index.js";
 import { UAParser } from "ua-parser-js";
 
