@@ -3,8 +3,13 @@ import Joi from "joi";
 
 const validate = (schema: Joi.AnySchema) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    // 'abortEarly: false' finds all errors, not just the first one
-    // 'stripUnknown: true' removes fields not defined in your schema (Security Best Practice)
+    if (!req.body || Object.keys(req.body).length === 0) {
+      return res.status(400).json({
+        status: "error",
+        message: "Request body is required",
+      });
+    }
+
     const { error, value } = schema.validate(req.body, {
       abortEarly: false,
       stripUnknown: true,
@@ -21,8 +26,6 @@ const validate = (schema: Joi.AnySchema) => {
       });
     }
 
-    // Replace req.body with the sanitized 'value'
-    // This ensures only your Joi-defined fields reach your controller
     req.body = value;
     next();
   };

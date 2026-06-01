@@ -9,7 +9,7 @@ export default async (req: Request, res: Response) => {
   const user = await db.user
     .create({ data: { ...data, passwordHash: hashedPassword } })
     .catch((reason) => {
-      res.status(500).send(reason);
+      res.status(400).send(reason);
     });
 
   res.status(201).json({ msg: "user created succesfully" });
